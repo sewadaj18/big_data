@@ -1,0 +1,10 @@
+Big Data est une révolution dans le traitement des données massives.
+Hadoop permet de stocker et traiter des données distribuées sur plusieurs machines.
+Le facteur de réplication garantit la tolérance aux pannes dans HDFS.
+Spark est un moteur de calcul en mémoire plus rapide que MapReduce.
+YARN gère l'allocation des ressources CPU et mémoire sur le cluster.
+La distribution des données permet de paralléliser les traitements.
+Un Data Lake centralise les données brutes pour analyse ultérieure.
+L'architecture Master Worker est fondamentale en Big Data.
+Les DataNodes stockent les blocs de données répliqués.
+Le NameNode gère les métadonnées du système de fichiers distribué.

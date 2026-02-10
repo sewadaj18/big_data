@@ -1,0 +1,27 @@
+# Données générées
+data/*.csv
+data/output/
+data/*.parquet
+
+# Logs
+*.log
+
+# Docker
+.docker/
+
+# Archives téléchargées (trop volumineuses pour Git)
+docker/hadoop/downloads/*.tar.gz
+docker/hadoop/downloads/*.tgz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
