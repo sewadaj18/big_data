@@ -1,246 +1,123 @@
-# Mini-Data Lake Académique
+# Mini data lake : Hadoop et Spark sur Docker
 
-Projet pédagogique de mise en place d'un cluster Big Data distribué avec Hadoop, HDFS, YARN et Spark.
+Cluster Big Data distribué sur trois conteneurs Docker : un master et deux workers.
+Je l'ai monté pour comprendre concrètement le fonctionnement de HDFS, YARN et Spark,
+et pour vérifier qu'un fichier reste accessible quand un nœud tombe.
 
-## 🎯 Objectifs Pédagogiques
-
-1. **Comprendre l'architecture distribuée** : Master/Worker avec 3 nœuds
-2. **Maîtriser HDFS** : Stockage distribué avec réplication
-3. **Gérer les ressources** : YARN pour l'ordonnancement
-4. **Traiter les données** : Spark pour le calcul en mémoire
-5. **Tester la tolérance aux pannes** : Simulation de défaillance
-
-## 🏗️ Architecture du Cluster
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│              MASTER NODE (172.25.0.10)          │
-│  - NameNode (HDFS)                              │
-│  - ResourceManager (YARN)                       │
-│  - Spark Master                                 │
-└─────────────────────────────────────────────────┘
-                      │
-        ┌─────────────┴─────────────┐
-        │                           │
-┌───────▼──────────┐      ┌────────▼─────────┐
-│  WORKER 1        │      │  WORKER 2        │
-│  (172.25.0.11)   │      │  (172.25.0.12)   │
-│  - DataNode      │      │  - DataNode      │
-│  - NodeManager   │      │  - NodeManager   │
-│  - Spark Worker  │      │  - Spark Worker  │
-└──────────────────┘      └──────────────────┘
+                 master (172.25.0.10)
+         NameNode, ResourceManager, Spark Master
+                         |
+          +--------------+--------------+
+          |                             |
+  worker1 (172.25.0.11)         worker2 (172.25.0.12)
+  DataNode, NodeManager,        DataNode, NodeManager,
+  Spark Worker                  Spark Worker
 ```
 
-## 📦 Composants Installés
+| Composant | Version |
+|---|---|
+| Ubuntu (image de base) | 22.04 |
+| Java | OpenJDK 8 |
+| Hadoop (HDFS, YARN) | 3.3.6 |
+| Spark / PySpark | 3.5.1 |
 
-| Composant | Version | Rôle |
-|-----------|---------|------|
-| **Hadoop** | 3.3.6 | Stockage distribué (HDFS) + Gestion ressources (YARN) |
-| **Spark** | 3.5.0 | Moteur de calcul en mémoire |
-| **Java** | OpenJDK 8 | Runtime pour Hadoop/Spark |
-| **Python** | 3.10 | Scripts PySpark |
+Les trois nœuds partagent la même image (`docker/hadoop/Dockerfile`). C'est la variable `NODE_TYPE` qui décide
+au démarrage des services à lancer (`docker/hadoop/entrypoint.sh`). Le master formate le NameNode au premier
+lancement, puis démarre HDFS et YARN sur tout le cluster par SSH, et enfin le Spark Master.
+Les workers rejoignent ensuite le Spark Master.
 
-## 🚀 Démarrage du Cluster
+Configuration principale :
+- `dfs.replication = 2` : chaque bloc est stocké sur les deux DataNodes ;
+- réseau Docker dédié `172.25.0.0/16` avec des IP fixes, et noms résolus via `/etc/hosts`.
 
-### 1. Télécharger les dépendances (une seule fois)
+## Lancer le cluster
+
+Prérequis : Docker et Docker Compose, environ 4 Go de RAM libres.
 
 ```bash
-# Télécharger Hadoop (696 MB) et Spark (400 MB)
-./download_dependencies.sh
-```
-
-**Note** : Le téléchargement peut prendre 10-30 minutes selon votre connexion. Le script reprend automatiquement en cas d'interruption.
-
-### 2. Construire les images Docker
-
-```bash
+./download_dependencies.sh   # récupère les archives Hadoop et Spark dans docker/hadoop/downloads (une seule fois)
 docker-compose build
-```
-
-### 3. Lancer l'infrastructure
-
-```bash
 docker-compose up -d
-```
-
-### 4. Vérifier l'état des conteneurs
-
-```bash
 docker-compose ps
 ```
 
-### 3. Accéder aux interfaces Web
+L'initialisation prend une trentaine de secondes. Interfaces web :
 
-- **HDFS NameNode** : http://localhost:9870
-- **YARN ResourceManager** : http://localhost:8088
-- **Spark Master** : http://localhost:8080
+| Service | URL |
+|---|---|
+| HDFS NameNode | http://localhost:9870 |
+| YARN ResourceManager | http://localhost:8088 |
+| Spark Master | http://localhost:8080 |
 
-## 📊 Cas Pratiques
-
-### Test 1 : Ingestion de données dans HDFS
-
-```bash
-# Accéder au master
-docker exec -it hadoop-master bash
-
-# Créer un répertoire dans HDFS
-hdfs dfs -mkdir -p /data
-
-# Charger un fichier
-hdfs dfs -put /data/input.txt /data/
-
-# Vérifier le fichier
-hdfs dfs -ls /data/
-hdfs dfs -cat /data/input.txt
-```
-
-### Test 2 : Traitement distribué avec PySpark (WordCount)
-
-```bash
-# Dans le conteneur master
-docker exec -it hadoop-master bash
-
-# Lancer le script de comptage de mots
-spark-submit --master spark://master:7077 /scripts/test_wordcount.py
-
-# Voir les résultats
-hdfs dfs -cat /data/output/part-00000 | head -20
-```
-
-### Test 3 : Analyse CSV avec Spark
-
-```bash
-# Charger un fichier CSV dans HDFS
-hdfs dfs -put /data/dataset.csv /data/
-
-# Lancer l'analyse
-spark-submit --master spark://master:7077 /scripts/test_csv_analysis.py
-```
-
-## 🔥 Test de Tolérance aux Pannes
-
-### Démonstration du facteur de réplication
-
-```bash
-# 1. Charger un fichier important
-docker exec -it hadoop-master bash
-hdfs dfs -put /data/input.txt /data/test_replication.txt
-
-# 2. Vérifier la réplication (doit être sur 2 DataNodes)
-hdfs fsck /data/test_replication.txt -files -blocks -locations
-
-# 3. Arrêter un Worker
-docker stop hadoop-worker1
-
-# 4. Vérifier que le fichier est toujours accessible
-hdfs dfs -cat /data/test_replication.txt
-
-# 5. Redémarrer le Worker
-docker start hadoop-worker1
-```
-
-**Résultat attendu** : Le fichier reste accessible même avec un Worker arrêté grâce au facteur de réplication = 2.
-
-## 📈 Monitoring du Cluster
-
-### Vérifier l'état HDFS
+Pour vérifier que les deux DataNodes et les deux NodeManagers sont bien enregistrés :
 
 ```bash
 docker exec -it hadoop-master hdfs dfsadmin -report
-```
-
-### Vérifier les nœuds YARN
-
-```bash
 docker exec -it hadoop-master yarn node -list
 ```
 
-### Logs des services
+## Tests réalisés
+
+### 1. Ingestion dans HDFS
+
+Le dossier `data/` est monté dans les conteneurs sous `/data`.
 
 ```bash
-# Logs du master
-docker logs hadoop-master
-
-# Logs d'un worker
-docker logs hadoop-worker1
+docker exec -it hadoop-master bash
+hdfs dfs -mkdir -p /data
+hdfs dfs -put /data/input.txt /data/
+hdfs dfs -cat /data/input.txt
 ```
 
-## 🛠️ Commandes Utiles
+### 2. WordCount distribué avec PySpark
 
-### HDFS
+`scripts/test_wordcount.py` lit `input.txt` depuis HDFS, compte les mots, affiche les 20 plus fréquents
+et écrit le résultat dans `hdfs:///data/output`.
 
 ```bash
-# Lister les fichiers
-hdfs dfs -ls /
-
-# Créer un répertoire
-hdfs dfs -mkdir /mon_dossier
-
-# Copier depuis local vers HDFS
-hdfs dfs -put fichier.txt /data/
-
-# Copier depuis HDFS vers local
-hdfs dfs -get /data/fichier.txt .
-
-# Supprimer un fichier
-hdfs dfs -rm /data/fichier.txt
-
-# Voir l'espace disque
-hdfs dfs -df -h
+spark-submit --master spark://master:7077 /scripts/test_wordcount.py
+hdfs dfs -cat /data/output/part-00000 | head -20
 ```
 
-### Spark
+### 3. Analyse d'un CSV
+
+`scripts/test_csv_analysis.py` charge un CSV, affiche son schéma et ses statistiques descriptives,
+puis l'enregistre au format Parquet. Le dépôt ne fournit pas de CSV : il faut placer un fichier
+`dataset.csv` dans `data/` avant de le lancer.
 
 ```bash
-# Soumettre un job Spark
-spark-submit --master spark://master:7077 script.py
-
-# Shell interactif PySpark
-pyspark --master spark://master:7077
+hdfs dfs -put /data/dataset.csv /data/
+spark-submit --master spark://master:7077 /scripts/test_csv_analysis.py
 ```
 
-## 📝 Points Clés pour le Rapport Académique
-
-### 1. Installation et Configuration
-- Configuration du fichier `/etc/hosts` pour la résolution DNS
-- Échange de clés SSH entre les nœuds
-- Paramétrage du facteur de réplication (dfs.replication=2)
-
-### 2. Architecture Distribuée
-- Séparation Master/Worker
-- Répartition des rôles (NameNode, DataNode, ResourceManager, NodeManager)
-- Communication inter-nœuds via réseau Docker
-
-### 3. Tolérance aux Pannes
-- Réplication des blocs de données
-- Test de défaillance d'un Worker
-- Récupération automatique
-
-### 4. Performance
-- Calcul distribué avec Spark
-- Comparaison temps de traitement local vs distribué
-- Utilisation de la mémoire (Spark) vs disque (MapReduce)
-
-## 🧹 Nettoyage
+### 4. Tolérance aux pannes
 
 ```bash
-# Arrêter le cluster
-docker-compose down
+docker exec -it hadoop-master hdfs dfs -put /data/input.txt /data/test_replication.txt
+docker exec -it hadoop-master hdfs fsck /data/test_replication.txt -files -blocks -locations
 
-# Supprimer les volumes (données persistantes)
-docker-compose down -v
-
-# Supprimer les images
-docker rmi $(docker images -q mini-data-lake*)
+docker stop hadoop-worker1
+docker exec -it hadoop-master hdfs dfs -cat /data/test_replication.txt   # toujours lisible
+docker start hadoop-worker1
 ```
 
-## 📚 Ressources
+Avec un facteur de réplication de 2, chaque bloc a une copie sur chaque DataNode. La perte d'un worker ne
+rend donc pas le fichier inaccessible. `fsck` indique ensuite les blocs sous-répliqués jusqu'au retour du nœud.
 
-- [Documentation Hadoop](https://hadoop.apache.org/docs/stable/)
-- [Documentation Spark](https://spark.apache.org/docs/latest/)
-- [HDFS Architecture](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html)
-- [YARN Architecture](https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/YARN.html)
+## Limites
 
-## 🎓 Auteur
+C'est un environnement de labo, pas une configuration à reproduire en production :
+- tous les services tournent en `root` ;
+- la paire de clés SSH est générée au build de l'image, donc identique sur les trois nœuds ;
+- aucune authentification (pas de Kerberos) et des interfaces web exposées sans contrôle d'accès ;
+- un seul NameNode : si le master s'arrête, HDFS n'est plus disponible.
 
-Projet académique - Mini-Data Lake pour démonstration pédagogique
+## Arrêt
+
+```bash
+docker-compose down      # arrête le cluster
+docker-compose down -v   # supprime aussi les volumes
+```
