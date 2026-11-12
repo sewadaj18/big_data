@@ -1,6 +1,6 @@
-# Guide d'Utilisation - Mini-Data Lake Académique
+# Guide d'utilisation
 
-## 🚀 Démarrage Rapide
+## Démarrage Rapide
 
 ### 1. Télécharger les dépendances
 
@@ -39,7 +39,7 @@ hdfs dfsadmin -report
 yarn node -list
 ```
 
-## 📊 Exercices Pratiques
+## Exercices Pratiques
 
 ### Exercice 1 : Ingestion de données
 
@@ -82,20 +82,20 @@ docker exec -it hadoop-master hdfs fsck /data/test_fault.txt -files -blocks -loc
 # 3. Arrêter un worker
 docker stop hadoop-worker1
 
-# 4. Le fichier reste accessible !
+# 4. Le fichier reste accessible
 docker exec -it hadoop-master hdfs dfs -cat /data/test_fault.txt
 
 # 5. Redémarrer
 docker start hadoop-worker1
 ```
 
-## 🌐 Interfaces Web
+## Interfaces Web
 
 - HDFS : http://localhost:9870
 - YARN : http://localhost:8088
 - Spark : http://localhost:8080
 
-## 🛑 Arrêt du cluster
+## Arrêt du cluster
 
 ```bash
 docker-compose down
